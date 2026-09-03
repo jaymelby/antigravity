@@ -32,6 +32,14 @@ export function getWebviewContent(
       <div class="brand">
         <span class="brand-icon">🚀</span>
         <span class="brand-title">Antigravity</span>
+        <!-- Telemetry HUD Chip -->
+        <div id="telemetry-hud" class="telemetry-hud-chip" title="Click to inspect live AI compute and credit telemetry">
+          <span class="hud-icon">🤖</span>
+          <span id="hud-model-name">Copilot</span>
+          <span class="hud-divider">•</span>
+          <span class="hud-aic-icon">💳</span>
+          <span id="hud-aic-value">0.000 AIC</span>
+        </div>
       </div>
       <div class="header-actions">
         <button id="btn-header-rollback" class="btn btn-sm btn-danger btn-rollback hidden" title="Rollback to pre-execution checkpoint">
@@ -47,6 +55,62 @@ export function getWebviewContent(
       </div>
     </header>
 
+    <!-- Telemetry Detail Popover -->
+    <div id="telemetry-popover" class="telemetry-popover hidden">
+      <div class="telemetry-popover-header">
+        <div class="telemetry-popover-title">
+          <span>⚡</span>
+          <h4>AI Compute & Credit Telemetry</h4>
+        </div>
+        <button id="btn-close-telemetry" class="icon-btn" title="Close Popover">✕</button>
+      </div>
+      <div class="telemetry-popover-body">
+        <div class="telemetry-group">
+          <div class="telemetry-group-title">Active Model & Pricing</div>
+          <div class="telemetry-row">
+            <span class="telemetry-label">Selected Model:</span>
+            <span id="telemetry-model-name" class="telemetry-val text-accent">Copilot</span>
+          </div>
+          <div class="telemetry-row">
+            <span class="telemetry-label">Discovered Rate:</span>
+            <span id="telemetry-pricing-label" class="telemetry-val text-muted">Auto-detected from Copilot</span>
+          </div>
+        </div>
+
+        <div class="telemetry-group">
+          <div class="telemetry-group-title">Last Turn Telemetry</div>
+          <div class="telemetry-row">
+            <span class="telemetry-label">Input Tokens:</span>
+            <span id="telemetry-last-in" class="telemetry-val font-mono">0</span>
+          </div>
+          <div class="telemetry-row">
+            <span class="telemetry-label">Output Tokens:</span>
+            <span id="telemetry-last-out" class="telemetry-val font-mono">0</span>
+          </div>
+          <div class="telemetry-row">
+            <span class="telemetry-label">Turn Cost:</span>
+            <span id="telemetry-last-cost" class="telemetry-val font-bold text-success font-mono">0.000 AIC ($0.0000)</span>
+          </div>
+        </div>
+
+        <div class="telemetry-group">
+          <div class="telemetry-group-title">Cumulative Mission Session</div>
+          <div class="telemetry-row">
+            <span class="telemetry-label">Total Mission Compute:</span>
+            <span id="telemetry-total-tokens" class="telemetry-val font-mono">0 tokens</span>
+          </div>
+          <div class="telemetry-row">
+            <span class="telemetry-label">Total AI Credits:</span>
+            <span id="telemetry-total-aic" class="telemetry-val font-bold text-accent font-mono">0.000 AIC</span>
+          </div>
+          <div class="telemetry-row">
+            <span class="telemetry-label">Estimated Dollar Value:</span>
+            <span id="telemetry-total-usd" class="telemetry-val font-mono">$0.0000 USD</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Settings Modal -->
     <div id="settings-modal" class="settings-modal hidden">
       <div class="settings-modal-backdrop" id="settings-backdrop"></div>
@@ -59,6 +123,16 @@ export function getWebviewContent(
           <button id="btn-close-settings" class="icon-btn" title="Close Settings">✕</button>
         </div>
         <div class="settings-modal-body">
+          <div class="setting-item">
+            <div class="setting-info">
+              <label class="setting-label" for="setting-preferred-model">Preferred AI Model</label>
+              <span class="setting-desc">Select which Copilot model Antigravity invokes. Rates are dynamically discovered without manual updates.</span>
+            </div>
+            <select id="setting-preferred-model" class="setting-select">
+              <option value="auto">Auto / Default (Recommended)</option>
+            </select>
+          </div>
+
           <div class="setting-item">
             <div class="setting-info">
               <label class="setting-label" for="setting-code-snippets">Include Detailed Code Snippets in Plan</label>

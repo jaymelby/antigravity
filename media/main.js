@@ -33,6 +33,24 @@ const settingsBackdrop = document.getElementById("settings-backdrop");
 const btnSaveSettings = document.getElementById("btn-save-settings");
 const settingCodeSnippets = document.getElementById("setting-code-snippets");
 const settingMaxGrep = document.getElementById("setting-max-grep");
+const settingPreferredModel = document.getElementById("setting-preferred-model");
+
+// Telemetry HUD Elements
+const telemetryHud = document.getElementById("telemetry-hud");
+const telemetryPopover = document.getElementById("telemetry-popover");
+const btnCloseTelemetry = document.getElementById("btn-close-telemetry");
+const hudModelName = document.getElementById("hud-model-name");
+const hudAicValue = document.getElementById("hud-aic-value");
+
+// Telemetry Popover Elements
+const telemetryModelName = document.getElementById("telemetry-model-name");
+const telemetryPricingLabel = document.getElementById("telemetry-pricing-label");
+const telemetryLastIn = document.getElementById("telemetry-last-in");
+const telemetryLastOut = document.getElementById("telemetry-last-out");
+const telemetryLastCost = document.getElementById("telemetry-last-cost");
+const telemetryTotalTokens = document.getElementById("telemetry-total-tokens");
+const telemetryTotalAic = document.getElementById("telemetry-total-aic");
+const telemetryTotalUsd = document.getElementById("telemetry-total-usd");
 
 // Plan Elements
 const planTitle = document.getElementById("plan-title");
@@ -644,6 +662,26 @@ rollbackButtons.forEach(btn => {
   });
 });
 
+// Telemetry HUD Click Listeners
+if (telemetryHud && telemetryPopover) {
+  telemetryHud.addEventListener("click", (e) => {
+    e.stopPropagation();
+    telemetryPopover.classList.toggle("hidden");
+  });
+}
+if (btnCloseTelemetry && telemetryPopover) {
+  btnCloseTelemetry.addEventListener("click", () => {
+    telemetryPopover.classList.add("hidden");
+  });
+}
+document.addEventListener("click", (e) => {
+  if (telemetryPopover && !telemetryPopover.classList.contains("hidden")) {
+    if (!telemetryPopover.contains(e.target) && !telemetryHud.contains(e.target)) {
+      telemetryPopover.classList.add("hidden");
+    }
+  }
+});
+
 // Settings UI Listeners
 if (btnOpenSettings) {
   btnOpenSettings.addEventListener("click", () => {
@@ -665,9 +703,10 @@ if (btnSaveSettings) {
   btnSaveSettings.addEventListener("click", () => {
     const includeCodeSnippets = settingCodeSnippets ? settingCodeSnippets.checked : false;
     const maxGrepFiles = settingMaxGrep ? parseInt(settingMaxGrep.value, 10) || 5 : 5;
+    const preferredModel = settingPreferredModel ? settingPreferredModel.value : "auto";
     vscode.postMessage({
       type: "SAVE_SETTINGS",
-      payload: { includeCodeSnippets, maxGrepFiles }
+      payload: { includeCodeSnippets, maxGrepFiles, preferredModel }
     });
     if (settingsModal) settingsModal.classList.add("hidden");
   });
@@ -1063,6 +1102,43 @@ window.addEventListener("message", (event) => {
         }
         if (settingMaxGrep && typeof payload.maxGrepFiles === "number") {
           settingMaxGrep.value = payload.maxGrepFiles;
+        }
+        if (settingPreferredModel && Array.isArray(payload.availableModels)) {
+          settingPreferredModel.innerHTML = '<option value="auto">Auto / Default (Recommended)</option>';
+          payload.availableModels.forEach(m => {
+            const opt = document.createElement("option");
+            opt.value = m.id;
+            opt.textContent = `${m.name} (${m.pricing})`;
+            if (payload.preferredModel === m.id) opt.selected = true;
+            settingPreferredModel.appendChild(opt);
+          });
+          if (payload.preferredModel === "auto" || !payload.preferredModel) {
+            settingPreferredModel.value = "auto";
+          }
+        }
+      }
+      break;
+
+    case "TELEMETRY_UPDATE":
+      if (payload) {
+        if (payload.turn) {
+          if (hudModelName) hudModelName.textContent = payload.turn.modelName;
+          if (telemetryModelName) telemetryModelName.textContent = payload.turn.modelName;
+          if (telemetryPricingLabel) telemetryPricingLabel.textContent = payload.turn.pricingLabel;
+          if (telemetryLastIn) telemetryLastIn.textContent = payload.turn.inputTokens.toLocaleString();
+          if (telemetryLastOut) telemetryLastOut.textContent = payload.turn.outputTokens.toLocaleString();
+          if (telemetryLastCost) telemetryLastCost.textContent = `${payload.turn.estimatedAic.toFixed(3)} AIC ($${payload.turn.estimatedUsd.toFixed(4)})`;
+        }
+        if (payload.session) {
+          if (hudAicValue) hudAicValue.textContent = `${payload.session.sessionAic.toFixed(3)} AIC`;
+          if (telemetryTotalTokens) telemetryTotalTokens.textContent = `${payload.session.sessionTotalTokens.toLocaleString()} tokens`;
+          if (telemetryTotalAic) telemetryTotalAic.textContent = `${payload.session.sessionAic.toFixed(3)} AIC`;
+          if (telemetryTotalUsd) telemetryTotalUsd.textContent = `$${payload.session.sessionUsd.toFixed(4)} USD`;
+          if (!payload.turn && payload.session.lastTurn) {
+            if (hudModelName) hudModelName.textContent = payload.session.lastTurn.modelName;
+            if (telemetryModelName) telemetryModelName.textContent = payload.session.lastTurn.modelName;
+            if (telemetryPricingLabel) telemetryPricingLabel.textContent = payload.session.lastTurn.pricingLabel;
+          }
         }
       }
       break;

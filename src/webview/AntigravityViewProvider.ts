@@ -8,6 +8,7 @@ import { TaskRunner } from '../services/taskRunner';
 import { WorkspaceSearchService } from '../services/workspaceSearch';
 import { CheckpointStore } from '../services/checkpointStore';
 import { AntigravityDiffProvider } from '../services/diffProvider';
+import { CopilotTelemetryService, TurnTelemetry } from '../services/copilotTelemetryService';
 
 export class AntigravityViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'antigravity.controlCenter';
@@ -15,6 +16,7 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
   private readonly workspaceSearch = new WorkspaceSearchService();
   private readonly checkpointStore = new CheckpointStore();
   private readonly diffProvider = new AntigravityDiffProvider();
+  private readonly telemetryService = new CopilotTelemetryService();
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -78,6 +80,8 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
             try { await vscode.workspace.fs.delete(spJson); } catch {}
           }
           this.scratchpadStore.clearScratchpad();
+          this.telemetryService.resetSession();
+          this.broadcastTelemetry();
           this.taskRunner.reset('Ready for your next coding mission.');
           this.taskRunner.setState('IDLE');
           await this.syncAllData();
@@ -95,7 +99,7 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
         }
 
         case 'GET_SETTINGS':
-          this.sendSettings();
+          await this.sendSettings();
           break;
 
         case 'SAVE_SETTINGS': {
@@ -107,8 +111,11 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
             if (typeof message.payload.maxGrepFiles === 'number') {
               await config.update('maxGrepFiles', message.payload.maxGrepFiles, vscode.ConfigurationTarget.Global);
             }
+            if (typeof message.payload.preferredModel === 'string') {
+              await config.update('preferredModel', message.payload.preferredModel, vscode.ConfigurationTarget.Global);
+            }
             vscode.window.showInformationMessage('⚙️ Antigravity preferences saved.');
-            this.sendSettings();
+            await this.sendSettings();
           }
           break;
         }
@@ -381,8 +388,7 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
     let step3: any;
 
     try {
-      const models = await vscode.lm.selectChatModels({ vendor: 'copilot' });
-      const model = models[0] || (await vscode.lm.selectChatModels())[0];
+      const model = await this.getSelectedModel();
 
       if (model) {
         const config = vscode.workspace.getConfiguration('antigravity');
@@ -420,6 +426,9 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
           vscode.LanguageModelChatMessage.User(systemInstruction)
         ];
 
+        // Measure input prompt tokens
+        const inputTokens = await this.safeCountTokens(model, systemInstruction);
+
         const cancellation = new vscode.CancellationTokenSource();
         const response = await model.sendRequest(messages, {}, cancellation.token);
 
@@ -456,6 +465,16 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
             this.postMessage({ type: 'STREAM_CHUNK', payload: { chunk } });
           }
         }
+
+        // Measure output tokens and calculate usage
+        const outputTokens = await this.safeCountTokens(model, fullRaw || streamedResponse);
+        const turnTelemetry = this.telemetryService.calculateUsage(model, inputTokens, outputTokens);
+        this.broadcastTelemetry(turnTelemetry);
+
+        this.scratchpadStore.addRunningComment(
+          'observation',
+          `🤖 **${turnTelemetry.modelName}** | 📥 ${turnTelemetry.inputTokens.toLocaleString()} in | 📤 ${turnTelemetry.outputTokens.toLocaleString()} out | 💳 **~${turnTelemetry.estimatedAic.toFixed(3)} AIC** ($${turnTelemetry.estimatedUsd.toFixed(4)})`
+        );
 
         if (!thoughtCompleted) {
           this.scratchpadStore.finishThoughtStep(step2.id);
@@ -641,10 +660,10 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
       let modelDiffOutput = '';
 
       try {
-        const models = await vscode.lm.selectChatModels({ vendor: 'copilot' });
-        const model = models[0] || (await vscode.lm.selectChatModels())[0];
+        const model = await this.getSelectedModel();
 
         if (model) {
+          const inTokens = await this.safeCountTokens(model, executionInstruction);
           const messages = [vscode.LanguageModelChatMessage.User(executionInstruction)];
           const cancellation = new vscode.CancellationTokenSource();
           const response = await model.sendRequest(messages, {}, cancellation.token);
@@ -654,6 +673,10 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
             this.scratchpadStore.appendThoughtChunk(stepFile.id, chunk);
             this.postMessage({ type: 'STREAM_CHUNK', payload: { chunk } });
           }
+
+          const outTokens = await this.safeCountTokens(model, modelDiffOutput);
+          const turn = this.telemetryService.calculateUsage(model, inTokens, outTokens);
+          this.broadcastTelemetry(turn);
         }
       } catch (err: any) {
         this.taskRunner.addLog('warn', `Notice for ${target.fileName}: ${err.message}`);
@@ -900,8 +923,7 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
     let walkthroughMarkdown = '';
 
     try {
-      const models = await vscode.lm.selectChatModels({ vendor: 'copilot' });
-      const model = models[0] || (await vscode.lm.selectChatModels())[0];
+      const model = await this.getSelectedModel();
 
       if (model) {
         const wtPrompt = 
@@ -923,6 +945,7 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
           '## User Verification & Next Steps\n' +
           '- Clear instructions on how the user can test and experience the new functionality.\n';
 
+        const inTokens = await this.safeCountTokens(model, wtPrompt);
         const messages = [vscode.LanguageModelChatMessage.User(wtPrompt)];
         const cancellation = new vscode.CancellationTokenSource();
         const response = await model.sendRequest(messages, {}, cancellation.token);
@@ -930,6 +953,10 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
         for await (const chunk of response.text) {
           walkthroughMarkdown += chunk;
         }
+
+        const outTokens = await this.safeCountTokens(model, walkthroughMarkdown);
+        const turn = this.telemetryService.calculateUsage(model, inTokens, outTokens);
+        this.broadcastTelemetry(turn);
       }
     } catch (err: any) {
       this.taskRunner.addLog('warn', `Notice during walkthrough generation: ${err.message}`);
@@ -951,6 +978,16 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
         '## User Verification & Next Steps\n' +
         '- Open your application and test the newly implemented functionality.\n';
     }
+
+    // Append AI Compute & Resource Breakdown
+    const sessionTelemetry = this.telemetryService.getCumulativeSession();
+    walkthroughMarkdown += 
+      `\n## 💳 AI Resources & Metering\n` +
+      `- **Active Model**: ${sessionTelemetry.lastTurn?.modelName || 'Copilot'} (\`${sessionTelemetry.lastTurn?.pricingLabel || 'Dynamic Rate'}\`)\n` +
+      `- **Total Input Tokens**: \`${sessionTelemetry.sessionInputTokens.toLocaleString()}\`\n` +
+      `- **Total Output Tokens**: \`${sessionTelemetry.sessionOutputTokens.toLocaleString()}\`\n` +
+      `- **Total Mission Compute**: \`${sessionTelemetry.sessionTotalTokens.toLocaleString()} tokens\`\n` +
+      `- **Total AI Credits**: \`~${sessionTelemetry.sessionAic.toFixed(3)} AIC\` (*$${sessionTelemetry.sessionUsd.toFixed(4)} USD*)\n`;
 
     const wtUri = vscode.Uri.joinPath(workspaceFolders[0].uri, '.copilot', 'walkthrough.md');
     await vscode.workspace.fs.writeFile(wtUri, Buffer.from(walkthroughMarkdown, 'utf8'));
@@ -995,8 +1032,7 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
       );
 
       try {
-        const models = await vscode.lm.selectChatModels({ vendor: 'copilot' });
-        const model = models[0] || (await vscode.lm.selectChatModels())[0];
+        const model = await this.getSelectedModel();
 
         if (model) {
           for (const item of problematicFiles) {
@@ -1011,6 +1047,7 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
               `\`\`\`\n${currentCode}\n\`\`\`\n\n` +
               `INSTRUCTION:\nFix all compiler/syntax errors. Return the entire corrected file content inside a single fenced code block:\n\`\`\`[lang]\n[repaired full code]\n\`\`\``;
 
+            const inTokens = await this.safeCountTokens(model, repairPrompt);
             const messages = [vscode.LanguageModelChatMessage.User(repairPrompt)];
             const cancel = new vscode.CancellationTokenSource();
             const response = await model.sendRequest(messages, {}, cancel.token);
@@ -1019,6 +1056,10 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
             for await (const chunk of response.text) {
               healedCode += chunk;
             }
+
+            const outTokens = await this.safeCountTokens(model, healedCode);
+            const turn = this.telemetryService.calculateUsage(model, inTokens, outTokens);
+            this.broadcastTelemetry(turn);
 
             const codeMatch = healedCode.match(/```(?:[a-zA-Z0-9_\-]*)\r?\n([\s\S]*?)```/);
             if (codeMatch && codeMatch[1].trim()) {
@@ -1104,18 +1145,73 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
     vscode.window.showInformationMessage(`📎 Attached ${fileName} to Antigravity mission.`);
   }
 
-  public openSettings() {
+  public async openSettings() {
     this.postMessage({ type: 'OPEN_SETTINGS' });
-    this.sendSettings();
+    await this.sendSettings();
   }
 
-  private sendSettings() {
+  private async safeCountTokens(model: vscode.LanguageModelChat, text: string): Promise<number> {
+    try {
+      return await model.countTokens(text);
+    } catch {
+      return 0;
+    }
+  }
+
+  private async getSelectedModel(): Promise<vscode.LanguageModelChat | undefined> {
+    const config = vscode.workspace.getConfiguration('antigravity');
+    const preferred = config.get<string>('preferredModel', 'auto');
+
+    let copilotModels: vscode.LanguageModelChat[] = [];
+    try {
+      copilotModels = await vscode.lm.selectChatModels({ vendor: 'copilot' });
+    } catch {}
+
+    if (copilotModels.length === 0) {
+      try {
+        const allModels = await vscode.lm.selectChatModels();
+        return allModels[0];
+      } catch {
+        return undefined;
+      }
+    }
+
+    if (preferred && preferred !== 'auto') {
+      const match = copilotModels.find((m: vscode.LanguageModelChat) =>
+        m.id.toLowerCase() === preferred.toLowerCase() ||
+        m.family.toLowerCase() === preferred.toLowerCase()
+      );
+      if (match) return match;
+    }
+
+    return copilotModels[0];
+  }
+
+  public broadcastTelemetry(turn?: TurnTelemetry) {
+    this.postMessage({
+      type: 'TELEMETRY_UPDATE',
+      payload: {
+        turn,
+        session: this.telemetryService.getCumulativeSession()
+      }
+    });
+  }
+
+  private async sendSettings() {
     const config = vscode.workspace.getConfiguration('antigravity');
     const includeCodeSnippets = config.get<boolean>('includeCodeSnippetsInPlan', false);
     const maxGrepFiles = config.get<number>('maxGrepFiles', 5);
+    const preferredModel = config.get<string>('preferredModel', 'auto');
+    const availableModels = await this.telemetryService.getAvailableModels();
+
     this.postMessage({
       type: 'SETTINGS_DATA',
-      payload: { includeCodeSnippets, maxGrepFiles }
+      payload: {
+        includeCodeSnippets,
+        maxGrepFiles,
+        preferredModel,
+        availableModels
+      }
     });
   }
 
@@ -1129,8 +1225,9 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
     const scratchpad = await this.scratchpadStore.getScratchpad();
     const taskState = this.taskRunner.getState();
 
-    this.sendSettings();
+    await this.sendSettings();
     this.broadcastCheckpointState();
+    this.broadcastTelemetry();
     this.postMessage({ type: 'INIT_DATA', payload: { plan, wt, scratchpad, taskState } });
   }
 

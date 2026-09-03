@@ -122,6 +122,11 @@
           "type": "number",
           "default": 5,
           "description": "Maximum number of matching workspace files to discover and attach via natural language grep."
+        },
+        "antigravity.preferredModel": {
+          "type": "string",
+          "default": "auto",
+          "description": "Preferred Copilot language model for Antigravity tasks (e.g., auto, gpt-4o, claude-3.5-sonnet)."
         }
       }
     },

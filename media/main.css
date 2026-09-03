@@ -1523,5 +1523,139 @@ input:checked + .slider:before {
   border-color: #89dceb;
 }
 
+/* ==========================================
+   Telemetry HUD & Popover Styles
+   ========================================== */
+.telemetry-hud-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(137, 180, 250, 0.12);
+  border: 1px solid rgba(137, 180, 250, 0.28);
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s ease;
+  margin-left: 4px;
+}
+
+.telemetry-hud-chip:hover {
+  background: rgba(137, 180, 250, 0.24);
+  border-color: var(--accent);
+  box-shadow: 0 0 8px rgba(137, 180, 250, 0.3);
+}
+
+.hud-divider {
+  opacity: 0.4;
+  font-size: 9px;
+}
+
+#hud-aic-value {
+  color: #a6e3a1;
+  font-weight: 600;
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.telemetry-popover {
+  position: absolute;
+  top: 48px;
+  left: 12px;
+  right: 12px;
+  background: #1e1e2e;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  z-index: 200;
+  padding: 12px 14px;
+  animation: fadeInDown 0.18s ease-out;
+}
+
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.telemetry-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+}
+
+.telemetry-popover-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.telemetry-popover-title h4 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.telemetry-group {
+  margin-bottom: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.telemetry-group-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.telemetry-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 3px 0;
+  font-size: 11px;
+}
+
+.telemetry-label {
+  color: var(--text-secondary);
+}
+
+.telemetry-val {
+  color: var(--text-main);
+}
+
+.setting-select {
+  background: var(--bg-tertiary);
+  color: var(--text-main);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 12px;
+  outline: none;
+  cursor: pointer;
+  min-width: 150px;
+  transition: border-color 0.2s;
+}
+
+.setting-select:focus {
+  border-color: var(--accent);
+}
+
+.text-muted { color: rgba(255, 255, 255, 0.5); }
+.text-accent { color: var(--accent); }
+.text-success { color: #a6e3a1; }
+.font-mono { font-family: var(--vscode-editor-font-family, monospace); }
+.font-bold { font-weight: 700; }
+
 .hidden { display: none !important; }
+
 
