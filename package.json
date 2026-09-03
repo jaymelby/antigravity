@@ -1,0 +1,144 @@
+{
+  "name": "antigravity-vscode",
+  "displayName": "Antigravity Agent Mission Control",
+  "description": "Antigravity experience in VS Code: Task tracker, Implementation Plan approval gates, Scratchpad canvas, and Walkthrough verification reports.",
+  "version": "1.0.0",
+  "publisher": "antigravity",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "AI",
+    "Productivity",
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:antigravity.controlCenter",
+    "onChatParticipant:antigravity"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jaymelby/antigravity.git"
+  },
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "antigravity-sidebar",
+          "title": "Antigravity",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "antigravity-sidebar": [
+        {
+          "type": "webview",
+          "id": "antigravity.controlCenter",
+          "name": "Mission Control",
+          "icon": "media/icon.svg",
+          "contextualTitle": "Antigravity Control Center"
+        }
+      ]
+    },
+    "chatParticipants": [
+      {
+        "id": "antigravity",
+        "name": "antigravity",
+        "description": "Antigravity agent assistant with Planning and Walkthrough gates",
+        "isDefault": false,
+        "commands": [
+          {
+            "name": "plan",
+            "description": "Research workspace and draft an implementation plan with review gate"
+          },
+          {
+            "name": "execute",
+            "description": "Approve and execute the active implementation plan"
+          },
+          {
+            "name": "walkthrough",
+            "description": "Verify code changes and generate a walkthrough report"
+          },
+          {
+            "name": "scratch",
+            "description": "Open and focus the scratchpad canvas"
+          }
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "antigravity.openControlCenter",
+        "title": "Antigravity: Open Mission Control Panel",
+        "category": "Antigravity"
+      },
+      {
+        "command": "antigravity.showPlan",
+        "title": "Antigravity: Switch to Implementation Plan Tab",
+        "category": "Antigravity"
+      },
+      {
+        "command": "antigravity.showScratchpad",
+        "title": "Antigravity: Switch to Scratchpad Tab",
+        "category": "Antigravity"
+      },
+      {
+        "command": "antigravity.showWalkthrough",
+        "title": "Antigravity: Switch to Walkthrough Tab",
+        "category": "Antigravity"
+      },
+      {
+        "command": "antigravity.approvePlan",
+        "title": "Antigravity: Approve & Execute Current Plan",
+        "category": "Antigravity"
+      },
+      {
+        "command": "antigravity.attachFileToContext",
+        "title": "Antigravity: Attach to Mission Context",
+        "category": "Antigravity"
+      },
+      {
+        "command": "antigravity.openSettings",
+        "title": "Antigravity: Open Settings",
+        "category": "Antigravity"
+      }
+    ],
+    "configuration": {
+      "title": "Antigravity",
+      "properties": {
+        "antigravity.includeCodeSnippetsInPlan": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether to include detailed code snippets in implementation plans instead of concise architectural summaries."
+        },
+        "antigravity.maxGrepFiles": {
+          "type": "number",
+          "default": 5,
+          "description": "Maximum number of matching workspace files to discover and attach via natural language grep."
+        }
+      }
+    },
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "antigravity.attachFileToContext",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "compile": "tsc -p ./ --noEmit && node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "build": "node esbuild.js --production"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.9",
+    "@types/vscode": "^1.90.0",
+    "esbuild": "^0.23.0",
+    "typescript": "^5.5.2"
+  }
+}
