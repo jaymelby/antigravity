@@ -74,6 +74,18 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand('antigravity.selectModel', async () => {
       await provider.promptModelSelection();
+    }),
+
+    vscode.commands.registerCommand('antigravity.exportMissionLog', async () => {
+      await provider.exportCurrentMissionLog();
+    }),
+
+    vscode.commands.registerCommand('antigravity.importMissionLog', async () => {
+      await provider.promptImportMissionLog();
+    }),
+
+    vscode.commands.registerCommand('antigravity.clearHistoricalContext', async () => {
+      provider.clearHistoricalContext();
     })
   );
 

@@ -1722,7 +1722,48 @@ input:checked + .slider:before {
   background: rgba(137, 180, 250, 0.1);
 }
 
+.header-btn {
+  font-size: 10px;
+  padding: 2px 7px;
+  letter-spacing: 0.2px;
+}
+
+/* Historical Mission Context Strip & Chip */
+.history-context-strip {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+  animation: fadeInDown 0.2s ease-out;
+}
+
+.history-context-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(249, 226, 175, 0.12);
+  border: 1px solid rgba(249, 226, 175, 0.35);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  color: #f9e2af;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.history-icon {
+  font-size: 12px;
+}
+
+.history-chip-text {
+  font-size: 11px;
+}
+
+.history-chip-text strong {
+  color: #fff;
+  font-weight: 600;
+}
+
 .hidden { display: none !important; }
+
 
 
 

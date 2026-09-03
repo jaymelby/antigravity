@@ -9,6 +9,7 @@ import { WorkspaceSearchService } from '../services/workspaceSearch';
 import { CheckpointStore } from '../services/checkpointStore';
 import { AntigravityDiffProvider } from '../services/diffProvider';
 import { CopilotTelemetryService, TurnTelemetry } from '../services/copilotTelemetryService';
+import { MissionLogService } from '../services/missionLogService';
 
 export class AntigravityViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'antigravity.controlCenter';
@@ -17,6 +18,8 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
   private readonly checkpointStore = new CheckpointStore();
   private readonly diffProvider = new AntigravityDiffProvider();
   private readonly telemetryService = new CopilotTelemetryService();
+  private readonly missionLogService = new MissionLogService();
+  private activeHistoricalContext: { logName: string; summary: string; goal: string } | null = null;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -132,6 +135,18 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
 
         case 'PROMPT_SELECT_MODEL':
           await this.promptModelSelection();
+          break;
+
+        case 'EXPORT_MISSION_LOG':
+          await this.exportCurrentMissionLog();
+          break;
+
+        case 'IMPORT_MISSION_LOG':
+          await this.promptImportMissionLog();
+          break;
+
+        case 'CLEAR_HISTORICAL_CONTEXT':
+          this.clearHistoricalContext();
           break;
 
         case 'FILES_DROPPED': {
@@ -297,6 +312,16 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
     const MAX_CHAR_LIMIT = 250000;
     const TOTAL_BUDGET = 750000;
     let totalChars = 0;
+
+    // 0. Ingest Historical Mission Context (if imported or active)
+    if (this.activeHistoricalContext) {
+      contextPrompt += this.activeHistoricalContext.summary + '\n\n';
+      this.scratchpadStore.addRunningComment(
+        'thought',
+        `Injected prior mission context from log "${this.activeHistoricalContext.logName}" (${this.activeHistoricalContext.goal}) into Copilot reasoning prompt.`
+      );
+      this.taskRunner.addLog('info', `Using prior mission context: ${this.activeHistoricalContext.logName}`);
+    }
 
     const seenPaths = new Set<string>();
 
@@ -1283,6 +1308,205 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
+  public async exportCurrentMissionLog() {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+      vscode.window.showErrorMessage('Cannot export mission log: No active workspace folder found.');
+      return;
+    }
+
+    const workspaceRoot = workspaceFolders[0].uri;
+
+    let planMarkdown = '';
+    let walkthroughMarkdown = '';
+
+    try {
+      const planUri = vscode.Uri.joinPath(workspaceRoot, '.copilot', 'implementation_plan.md');
+      const bytes = await vscode.workspace.fs.readFile(planUri);
+      planMarkdown = Buffer.from(bytes).toString('utf8');
+    } catch {}
+
+    try {
+      const wtUri = vscode.Uri.joinPath(workspaceRoot, '.copilot', 'walkthrough.md');
+      const bytes = await vscode.workspace.fs.readFile(wtUri);
+      walkthroughMarkdown = Buffer.from(bytes).toString('utf8');
+    } catch {}
+
+    const rawScratchpad = await this.scratchpadStore.getScratchpad();
+    const taskState = this.taskRunner.getState();
+    const goal = taskState.goal || 'Antigravity Mission';
+
+    const cumulative = this.telemetryService.getCumulativeSession();
+    const telemetry = {
+      modelName: cumulative.lastTurn?.modelName,
+      tokens: cumulative.sessionTotalTokens,
+      aic: cumulative.sessionAic
+    };
+
+    try {
+      const { fileUri, fileName } = await this.missionLogService.exportMissionLog(
+        workspaceRoot,
+        goal,
+        planMarkdown,
+        walkthroughMarkdown,
+        rawScratchpad,
+        telemetry
+      );
+
+      this.scratchpadStore.addRunningComment('observation', `Exported mission log to \`Antigravity Logs/${fileName}\``);
+      this.taskRunner.addLog('success', `Exported mission log: Antigravity Logs/${fileName}`);
+
+      const openAction = 'Open Log';
+      const action = await vscode.window.showInformationMessage(
+        `📦 Mission log saved to "Antigravity Logs/${fileName}"`,
+        openAction
+      );
+      if (action === openAction) {
+        const doc = await vscode.workspace.openTextDocument(fileUri);
+        await vscode.window.showTextDocument(doc, vscode.ViewColumn.Beside);
+      }
+    } catch (err: any) {
+      vscode.window.showErrorMessage(`Failed to export mission log: ${err.message}`);
+    }
+  }
+
+  public async promptImportMissionLog() {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+      vscode.window.showErrorMessage('Cannot import mission log: No active workspace folder found.');
+      return;
+    }
+
+    const workspaceRoot = workspaceFolders[0].uri;
+    const availableLogs = await this.missionLogService.listMissionLogs(workspaceRoot);
+
+    type LogPickItem = vscode.QuickPickItem & { uri?: vscode.Uri; isBrowse?: boolean };
+    const items: LogPickItem[] = availableLogs.map(log => ({
+      label: `$(history) ${log.goal}`,
+      description: log.fileName,
+      detail: log.date ? `Exported: ${log.date}` : undefined,
+      uri: log.uri
+    }));
+
+    items.push({
+      label: '$(folder-opened) Browse Other File...',
+      description: 'Select an Antigravity mission log (.md) from filesystem',
+      isBrowse: true
+    });
+
+    const picked = await vscode.window.showQuickPick(items, {
+      title: 'Antigravity: Import Historical Mission Log',
+      placeHolder: 'Select a previous mission log to restore artifacts and inject context'
+    });
+
+    if (!picked) return;
+
+    let targetUri: vscode.Uri | undefined = picked.uri;
+
+    if (picked.isBrowse) {
+      const uris = await vscode.window.showOpenDialog({
+        canSelectFiles: true,
+        canSelectFolders: false,
+        canSelectMany: false,
+        filters: { 'Markdown Mission Logs': ['md'] },
+        title: 'Select Antigravity Mission Log'
+      });
+      if (uris && uris.length > 0) {
+        targetUri = uris[0];
+      } else {
+        return;
+      }
+    }
+
+    if (!targetUri) return;
+
+    try {
+      const imported = await this.missionLogService.importMissionLog(targetUri);
+
+      // Restore files in .copilot/
+      const copilotDir = vscode.Uri.joinPath(workspaceRoot, '.copilot');
+      await vscode.workspace.fs.createDirectory(copilotDir);
+
+      if (imported.planContent) {
+        const planUri = vscode.Uri.joinPath(copilotDir, 'implementation_plan.md');
+        await vscode.workspace.fs.writeFile(planUri, Buffer.from(imported.planContent, 'utf8'));
+      }
+
+      if (imported.walkthroughContent) {
+        const wtUri = vscode.Uri.joinPath(copilotDir, 'walkthrough.md');
+        await vscode.workspace.fs.writeFile(wtUri, Buffer.from(imported.walkthroughContent, 'utf8'));
+      }
+
+      // Restore scratchpad
+      const scratchpadPayload = {
+        notes: imported.scratchpadContent.notes || '',
+        steps: imported.scratchpadContent.keySteps.map((s, idx) => ({
+          id: `imported_step_${idx + 1}`,
+          title: s.title,
+          content: s.summary,
+          status: 'completed'
+        })),
+        runningComments: imported.scratchpadContent.keyComments.map(c => ({
+          id: `imported_cmt_${Math.random().toString(36).substring(2, 8)}`,
+          type: c.type,
+          text: c.text,
+          timestamp: Date.now()
+        }))
+      };
+
+      const spJsonUri = vscode.Uri.joinPath(copilotDir, 'scratchpad.json');
+      await vscode.workspace.fs.writeFile(spJsonUri, Buffer.from(JSON.stringify(scratchpadPayload, null, 2), 'utf8'));
+
+      // Set active historical context for Copilot
+      const fileName = path.basename(targetUri.fsPath);
+      this.activeHistoricalContext = {
+        logName: fileName,
+        summary: imported.copilotContextSummary,
+        goal: imported.metadata.goal
+      };
+
+      // Reload watchers
+      await this.planWatcher.reload();
+      await this.walkthroughWatcher.reload();
+      await this.scratchpadStore.reload();
+
+      this.taskRunner.reset(imported.metadata.goal);
+      this.taskRunner.setState('COMPLETED');
+      this.taskRunner.addLog('info', `Imported historical mission log: ${fileName}`);
+
+      this.scratchpadStore.addRunningComment(
+        'observation',
+        `Restored historical mission: "${imported.metadata.goal}" from \`${fileName}\`. Copilot prompt context now includes this mission history.`
+      );
+
+      this.broadcastHistoricalContext();
+      await this.syncAllData();
+
+      vscode.window.showInformationMessage(
+        `📜 Historical mission "${imported.metadata.goal}" restored! Copilot is now aware of prior decisions.`
+      );
+    } catch (err: any) {
+      vscode.window.showErrorMessage(`Failed to import mission log: ${err.message}`);
+    }
+  }
+
+  public clearHistoricalContext() {
+    this.activeHistoricalContext = null;
+    this.broadcastHistoricalContext();
+    vscode.window.showInformationMessage('Prior mission context detached from Copilot prompt.');
+  }
+
+  public broadcastHistoricalContext() {
+    this.postMessage({
+      type: 'HISTORICAL_CONTEXT_UPDATE',
+      payload: {
+        hasContext: !!this.activeHistoricalContext,
+        logName: this.activeHistoricalContext?.logName,
+        goal: this.activeHistoricalContext?.goal
+      }
+    });
+  }
+
   public switchTab(tabId: string) {
     this.postMessage({ type: 'SWITCH_TAB', payload: { tabId } });
   }
@@ -1296,6 +1520,7 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
     await this.sendSettings();
     this.broadcastCheckpointState();
     this.broadcastTelemetry();
+    this.broadcastHistoricalContext();
     this.postMessage({ type: 'INIT_DATA', payload: { plan, wt, scratchpad, taskState } });
   }
 

@@ -113,6 +113,21 @@
         "command": "antigravity.selectModel",
         "title": "Antigravity: Select AI Model",
         "category": "Antigravity"
+      },
+      {
+        "command": "antigravity.exportMissionLog",
+        "title": "Antigravity: Export Current Mission Log to Antigravity Logs",
+        "category": "Antigravity"
+      },
+      {
+        "command": "antigravity.importMissionLog",
+        "title": "Antigravity: Import Historical Mission Log",
+        "category": "Antigravity"
+      },
+      {
+        "command": "antigravity.clearHistoricalContext",
+        "title": "Antigravity: Clear Prior Mission Context",
+        "category": "Antigravity"
       }
     ],
     "configuration": {

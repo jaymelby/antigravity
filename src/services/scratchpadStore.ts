@@ -58,6 +58,10 @@ export class ScratchpadStore {
     return this.currentData;
   }
 
+  public async reload(): Promise<void> {
+    await this.loadFromDisk();
+  }
+
   public startThoughtStep(title: string): ThoughtStep {
     const step: ThoughtStep = {
       id: Math.random().toString(36).substring(2, 9),

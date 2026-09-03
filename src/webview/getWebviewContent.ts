@@ -42,6 +42,12 @@ export function getWebviewContent(
         </div>
       </div>
       <div class="header-actions">
+        <button id="btn-export-log" class="btn btn-sm btn-secondary header-btn" title="Export Plan, Walkthrough, and key Scratchpad insights to 'Antigravity Logs/'">
+          📦 Export
+        </button>
+        <button id="btn-import-log" class="btn btn-sm btn-secondary header-btn" title="Import historical mission log and inject as Copilot context">
+          📜 Import
+        </button>
         <button id="btn-header-rollback" class="btn btn-sm btn-danger btn-rollback hidden" title="Rollback to pre-execution checkpoint">
           ⏪ Rollback
         </button>
@@ -458,6 +464,15 @@ export function getWebviewContent(
           <select id="prompt-model-select" class="prompt-model-select" title="Select model for all tasks">
             <option value="auto">Auto / Default</option>
           </select>
+        </div>
+      </div>
+
+      <!-- Historical Context Indicator Strip -->
+      <div id="history-context-strip" class="history-context-strip hidden">
+        <div class="history-context-chip" title="Active historical mission context injected into Copilot prompts">
+          <span class="history-icon">📜</span>
+          <span class="history-chip-text">Prior Context: <strong id="history-chip-name">Mission Log</strong></span>
+          <button id="btn-clear-history" type="button" class="chip-remove-btn" title="Detach prior context from Copilot prompt">✕</button>
         </div>
       </div>
 

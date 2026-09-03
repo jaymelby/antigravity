@@ -35,6 +35,13 @@ const settingCodeSnippets = document.getElementById("setting-code-snippets");
 const settingMaxGrep = document.getElementById("setting-max-grep");
 const settingPreferredModel = document.getElementById("setting-preferred-model");
 
+// Mission Log Export/Import Elements
+const btnExportLog = document.getElementById("btn-export-log");
+const btnImportLog = document.getElementById("btn-import-log");
+const historyContextStrip = document.getElementById("history-context-strip");
+const historyChipName = document.getElementById("history-chip-name");
+const btnClearHistory = document.getElementById("btn-clear-history");
+
 // Telemetry HUD Elements
 const telemetryHud = document.getElementById("telemetry-hud");
 const telemetryPopover = document.getElementById("telemetry-popover");
@@ -708,6 +715,25 @@ document.addEventListener("click", (e) => {
   }
 });
 
+// Mission Log Export/Import Listeners
+if (btnExportLog) {
+  btnExportLog.addEventListener("click", () => {
+    vscode.postMessage({ type: "EXPORT_MISSION_LOG" });
+  });
+}
+
+if (btnImportLog) {
+  btnImportLog.addEventListener("click", () => {
+    vscode.postMessage({ type: "IMPORT_MISSION_LOG" });
+  });
+}
+
+if (btnClearHistory) {
+  btnClearHistory.addEventListener("click", () => {
+    vscode.postMessage({ type: "CLEAR_HISTORICAL_CONTEXT" });
+  });
+}
+
 // Settings UI Listeners
 if (btnOpenSettings) {
   btnOpenSettings.addEventListener("click", () => {
@@ -1205,7 +1231,15 @@ window.addEventListener("message", (event) => {
         });
       }
       break;
-  }
+
+    case "HISTORICAL_CONTEXT_UPDATE":
+      if (payload && payload.hasContext) {
+        if (historyContextStrip) historyContextStrip.classList.remove("hidden");
+        if (historyChipName) historyChipName.textContent = payload.goal || payload.logName || "Historical Mission";
+      } else {
+        if (historyContextStrip) historyContextStrip.classList.add("hidden");
+      }
+      break;
 });
 
 // Boot
