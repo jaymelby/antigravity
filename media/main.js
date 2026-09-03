@@ -1240,6 +1240,7 @@ window.addEventListener("message", (event) => {
         if (historyContextStrip) historyContextStrip.classList.add("hidden");
       }
       break;
+  }
 });
 
 // Boot
