@@ -103,6 +103,11 @@
         "command": "antigravity.openSettings",
         "title": "Antigravity: Open Settings",
         "category": "Antigravity"
+      },
+      {
+        "command": "antigravity.rollbackMission",
+        "title": "Antigravity: Rollback Mission to Checkpoint",
+        "category": "Antigravity"
       }
     ],
     "configuration": {

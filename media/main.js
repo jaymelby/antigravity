@@ -631,6 +631,19 @@ document.getElementById("btn-refresh-task")?.addEventListener("click", () => {
   vscode.postMessage({ type: "READY" });
 });
 
+// Rollback Listeners
+const rollbackButtons = [
+  document.getElementById("btn-header-rollback"),
+  document.getElementById("btn-plan-rollback"),
+  document.getElementById("btn-walkthrough-rollback")
+];
+
+rollbackButtons.forEach(btn => {
+  btn?.addEventListener("click", () => {
+    vscode.postMessage({ type: "ROLLBACK_MISSION" });
+  });
+});
+
 // Settings UI Listeners
 if (btnOpenSettings) {
   btnOpenSettings.addEventListener("click", () => {
@@ -860,7 +873,7 @@ function renderMarkdown(md) {
   // 2. File Action Headers: #### [MODIFY] [filename](url)
   html = html.replace(/^####\s*\[(MODIFY|NEW|DELETE)\]\s*\[([^\]]+)\]\(([^)]+)\)/gim, (match, action, fname, fpath) => {
     const badgeClass = action.toUpperCase() === 'NEW' ? 'badge-new' : action.toUpperCase() === 'DELETE' ? 'badge-delete' : 'badge-modify';
-    return `<div class="plan-file-header"><span class="badge ${badgeClass}">${action.toUpperCase()}</span> <a href="#" class="file-link" onclick="openFileUrl('${escapeHtml(fpath)}'); return false;">📄 ${escapeHtml(fname)}</a></div>`;
+    return `<div class="plan-file-header"><span class="badge ${badgeClass}">${action.toUpperCase()}</span> <a href="#" class="file-link" onclick="openFileUrl('${escapeHtml(fpath)}'); return false;">📄 ${escapeHtml(fname)}</a> <button class="btn-diff-preview" onclick="openFileDiff('${escapeHtml(fpath)}'); return false;" title="Inspect side-by-side diff in VS Code">🔍 Diff</button></div>`;
   });
 
   // 3. Headings
@@ -946,6 +959,14 @@ window.openFileUrl = function(rawUrl) {
     clean = clean.substring(1);
   }
   vscode.postMessage({ type: 'OPEN_FILE', payload: { filePath: clean } });
+};
+
+window.openFileDiff = function(rawUrl) {
+  let clean = rawUrl.replace(/^file:\/\/\/?/, '');
+  if (/^\/[a-zA-Z]:/.test(clean)) {
+    clean = clean.substring(1);
+  }
+  vscode.postMessage({ type: 'PREVIEW_DIFF', payload: { filePath: clean } });
 };
 
 function escapeHtml(text) {
@@ -1048,6 +1069,20 @@ window.addEventListener("message", (event) => {
 
     case "OPEN_SETTINGS":
       if (settingsModal) settingsModal.classList.remove("hidden");
+      break;
+
+    case "UPDATE_CHECKPOINT_STATE":
+      if (payload && typeof payload.hasCheckpoint === "boolean") {
+        rollbackButtons.forEach(btn => {
+          if (btn) {
+            if (payload.hasCheckpoint) {
+              btn.classList.remove("hidden");
+            } else {
+              btn.classList.add("hidden");
+            }
+          }
+        });
+      }
       break;
   }
 });

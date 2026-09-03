@@ -1471,4 +1471,57 @@ input:checked + .slider:before {
   color: #a6e3a1;
 }
 
+/* ==========================================
+   Rollback & Diff Preview Styles
+   ========================================== */
+.btn-danger {
+  background: rgba(243, 139, 168, 0.15);
+  border: 1px solid rgba(243, 139, 168, 0.35);
+  color: #f38ba8;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.15s ease;
+}
+
+.btn-danger:hover {
+  background: rgba(243, 139, 168, 0.3);
+  color: #fff;
+  border-color: rgba(243, 139, 168, 0.6);
+}
+
+.btn-rollback {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  animation: pulseWarning 2s infinite ease-in-out;
+}
+
+@keyframes pulseWarning {
+  0%, 100% { border-color: rgba(243, 139, 168, 0.35); }
+  50% { border-color: rgba(243, 139, 168, 0.8); }
+}
+
+.btn-diff-preview {
+  background: rgba(137, 220, 235, 0.15);
+  border: 1px solid rgba(137, 220, 235, 0.3);
+  color: #89dceb;
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-left: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.btn-diff-preview:hover {
+  background: rgba(137, 220, 235, 0.3);
+  color: #fff;
+  border-color: #89dceb;
+}
+
 .hidden { display: none !important; }
+

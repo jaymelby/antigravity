@@ -6,11 +6,15 @@ import { WalkthroughWatcher } from '../services/walkthroughWatcher';
 import { ScratchpadStore } from '../services/scratchpadStore';
 import { TaskRunner } from '../services/taskRunner';
 import { WorkspaceSearchService } from '../services/workspaceSearch';
+import { CheckpointStore } from '../services/checkpointStore';
+import { AntigravityDiffProvider } from '../services/diffProvider';
 
 export class AntigravityViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'antigravity.controlCenter';
   private _view?: vscode.WebviewView;
   private readonly workspaceSearch = new WorkspaceSearchService();
+  private readonly checkpointStore = new CheckpointStore();
+  private readonly diffProvider = new AntigravityDiffProvider();
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -19,6 +23,11 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
     private readonly scratchpadStore: ScratchpadStore,
     private readonly taskRunner: TaskRunner
   ) {
+    vscode.workspace.registerTextDocumentContentProvider(
+      AntigravityDiffProvider.scheme,
+      this.diffProvider
+    );
+
     this.planWatcher.onPlanChange((plan) => {
       this.postMessage({ type: 'UPDATE_PLAN', payload: plan });
     });
@@ -163,6 +172,16 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
 
         case 'APPROVE_PLAN':
           await this.executeApprovedPlan();
+          break;
+
+        case 'ROLLBACK_MISSION':
+          await this.rollbackMission();
+          break;
+
+        case 'PREVIEW_DIFF':
+          if (message.payload?.filePath) {
+            await this.previewFileDiff(message.payload.filePath);
+          }
           break;
 
         case 'GENERATE_WALKTHROUGH':
@@ -555,6 +574,22 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
+    // 0. Pre-Execution Checkpoint Snapshot (Instant Rollback Guard)
+    try {
+      await this.checkpointStore.createCheckpoint(
+        this.taskRunner.getState().goal || 'Approved Plan Execution',
+        targets.map(t => t.uri)
+      );
+      this.broadcastCheckpointState();
+      this.taskRunner.addLog('info', `Checkpoint created for ${targets.length} file(s). Rollback available.`);
+      this.scratchpadStore.addRunningComment(
+        'observation',
+        `Pre-execution checkpoint captured for ${targets.length} file(s). Rollback available at any time.`
+      );
+    } catch (err: any) {
+      this.taskRunner.addLog('warn', `Notice on checkpoint creation: ${err.message}`);
+    }
+
     const stepExec1 = this.scratchpadStore.startThoughtStep(`1. Ingesting Approved Multi-File Plan (${targets.length} files)`);
     this.scratchpadStore.addRunningComment('thought', `Detected ${targets.length} target file(s) to modify: ${targets.map(t => t.fileName).join(', ')}`);
     this.scratchpadStore.finishThoughtStep(
@@ -656,6 +691,9 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
 
     // Mark subtask 3 as done
     this.taskRunner.markSubtaskDone('3');
+
+    // Closed-Loop Diagnostics Inspection & Auto-Healing Pass
+    await this.inspectAndAutoHealDiagnostics(targets.map(t => t.uri));
 
     // Generate Walkthrough
     await this.generateWalkthroughReport();
@@ -923,6 +961,139 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
     this.taskRunner.addLog('success', 'Walkthrough report generated successfully.');
   }
 
+  /**
+   * Closed-loop diagnostics inspection and automatic repair pass.
+   */
+  private async inspectAndAutoHealDiagnostics(targetUris: vscode.Uri[], maxPasses = 2) {
+    // Wait briefly for VS Code language servers to compute diagnostics
+    await new Promise(r => setTimeout(r, 800));
+
+    for (let pass = 1; pass <= maxPasses; pass++) {
+      const problematicFiles: { uri: vscode.Uri; errors: vscode.Diagnostic[] }[] = [];
+
+      for (const uri of targetUris) {
+        const diags = vscode.languages.getDiagnostics(uri);
+        const errors = diags.filter(d => d.severity === vscode.DiagnosticSeverity.Error);
+        if (errors.length > 0) {
+          problematicFiles.push({ uri, errors });
+        }
+      }
+
+      if (problematicFiles.length === 0) {
+        this.taskRunner.addLog('success', '🩺 Diagnostics check passed: 0 compiler/syntax errors.');
+        this.scratchpadStore.addRunningComment('observation', '🩺 Diagnostics check passed: 0 compiler or syntax errors detected.');
+        return;
+      }
+
+      const totalErrors = problematicFiles.reduce((acc, p) => acc + p.errors.length, 0);
+      this.taskRunner.addLog('warn', `Detected ${totalErrors} compiler error(s) across ${problematicFiles.length} file(s). Initiating auto-healing (pass ${pass}/${maxPasses})...`);
+
+      const stepHeal = this.scratchpadStore.startThoughtStep(`Auto-Healing Diagnostics (Pass ${pass}/${maxPasses})`);
+      this.scratchpadStore.addRunningComment(
+        'thought',
+        `Compiler errors detected in: ${problematicFiles.map(p => `${path.basename(p.uri.fsPath)} (${p.errors.length})`).join(', ')}. Synthesizing corrective patch...`
+      );
+
+      try {
+        const models = await vscode.lm.selectChatModels({ vendor: 'copilot' });
+        const model = models[0] || (await vscode.lm.selectChatModels())[0];
+
+        if (model) {
+          for (const item of problematicFiles) {
+            const bytes = await vscode.workspace.fs.readFile(item.uri);
+            const currentCode = Buffer.from(bytes).toString('utf8');
+            const errorSummary = item.errors.map(e => `Line ${e.range.start.line + 1}: ${e.message}`).join('\n');
+
+            const repairPrompt = 
+              `You are Antigravity Auto-Healing Agent. The file ${path.basename(item.uri.fsPath)} has the following compiler/syntax errors:\n` +
+              `${errorSummary}\n\n` +
+              `CURRENT FILE CONTENT:\n` +
+              `\`\`\`\n${currentCode}\n\`\`\`\n\n` +
+              `INSTRUCTION:\nFix all compiler/syntax errors. Return the entire corrected file content inside a single fenced code block:\n\`\`\`[lang]\n[repaired full code]\n\`\`\``;
+
+            const messages = [vscode.LanguageModelChatMessage.User(repairPrompt)];
+            const cancel = new vscode.CancellationTokenSource();
+            const response = await model.sendRequest(messages, {}, cancel.token);
+
+            let healedCode = '';
+            for await (const chunk of response.text) {
+              healedCode += chunk;
+            }
+
+            const codeMatch = healedCode.match(/```(?:[a-zA-Z0-9_\-]*)\r?\n([\s\S]*?)```/);
+            if (codeMatch && codeMatch[1].trim()) {
+              await vscode.workspace.fs.writeFile(item.uri, Buffer.from(codeMatch[1].trim(), 'utf8'));
+              this.taskRunner.addLog('info', `Applied auto-healing patch to ${path.basename(item.uri.fsPath)}.`);
+            }
+          }
+
+          await new Promise(r => setTimeout(r, 600));
+        }
+      } catch (err: any) {
+        this.taskRunner.addLog('warn', `Auto-healing encountered notice: ${err.message}`);
+      }
+
+      this.scratchpadStore.finishThoughtStep(stepHeal.id, `Completed auto-healing pass ${pass}.`);
+    }
+  }
+
+  public async rollbackMission() {
+    try {
+      this.taskRunner.setState('EXECUTING');
+      this.taskRunner.addLog('warn', 'Initiating mission rollback to pre-execution checkpoint...');
+      const res = await this.checkpointStore.rollback();
+      this.taskRunner.setState('IDLE');
+      this.taskRunner.addLog('success', `Rolled back ${res.restoredCount} file(s): ${res.restoredFiles.join(', ')}`);
+      this.scratchpadStore.addRunningComment(
+        'decision',
+        `Mission Rolled Back. Restored ${res.restoredCount} file(s) to pre-execution state: ${res.restoredFiles.join(', ')}`
+      );
+      vscode.window.showInformationMessage(`⏪ Antigravity: Rolled back ${res.restoredCount} file(s) successfully.`);
+      this.broadcastCheckpointState();
+    } catch (err: any) {
+      vscode.window.showErrorMessage(`Rollback failed: ${err.message}`);
+    }
+  }
+
+  public async previewFileDiff(filePath: string) {
+    const clean = filePath.replace(/^file:\/\/\/?/, '');
+    const normalized = /^\/[a-zA-Z]:/.test(clean) ? clean.substring(1) : clean;
+    const fileUri = vscode.Uri.file(normalized);
+    const fileName = path.basename(normalized);
+
+    // Check if there is an active checkpoint snapshot for this file (post-execution diff)
+    const snapshot = this.checkpointStore.getSnapshotForFile(normalized);
+    if (snapshot && snapshot.originalContent) {
+      await this.diffProvider.showCheckpointDiff(
+        snapshot.originalContent,
+        fileUri,
+        `Antigravity Diff: ${fileName} (Baseline vs Current)`
+      );
+      return;
+    }
+
+    // Otherwise, preview current file against buffer
+    try {
+      const currentBytes = await vscode.workspace.fs.readFile(fileUri);
+      const currentContent = Buffer.from(currentBytes).toString('utf8');
+      await this.diffProvider.showDiff(
+        fileUri,
+        currentContent,
+        `Antigravity Diff: ${fileName}`
+      );
+    } catch {
+      vscode.window.showInformationMessage(`Cannot preview diff for ${fileName}: file does not exist on disk yet.`);
+    }
+  }
+
+  public broadcastCheckpointState() {
+    const hasCheckpoint = !!this.checkpointStore.getActiveCheckpoint();
+    this.postMessage({
+      type: 'UPDATE_CHECKPOINT_STATE',
+      payload: { hasCheckpoint }
+    });
+  }
+
   public attachFile(uri: vscode.Uri) {
     const fileName = path.basename(uri.fsPath);
     this.postMessage({
@@ -959,6 +1130,7 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
     const taskState = this.taskRunner.getState();
 
     this.sendSettings();
+    this.broadcastCheckpointState();
     this.postMessage({ type: 'INIT_DATA', payload: { plan, wt, scratchpad, taskState } });
   }
 

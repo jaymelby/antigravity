@@ -66,6 +66,10 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('antigravity.openSettings', async () => {
       await vscode.commands.executeCommand('antigravity.controlCenter.focus');
       provider.openSettings();
+    }),
+
+    vscode.commands.registerCommand('antigravity.rollbackMission', async () => {
+      await provider.rollbackMission();
     })
   );
 

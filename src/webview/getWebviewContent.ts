@@ -34,6 +34,9 @@ export function getWebviewContent(
         <span class="brand-title">Antigravity</span>
       </div>
       <div class="header-actions">
+        <button id="btn-header-rollback" class="btn btn-sm btn-danger btn-rollback hidden" title="Rollback to pre-execution checkpoint">
+          ⏪ Rollback
+        </button>
         <button id="btn-open-settings" class="btn btn-sm btn-secondary settings-btn" title="Antigravity Settings & Preferences">
           ⚙️ Settings
         </button>
@@ -191,6 +194,9 @@ export function getWebviewContent(
             <button id="btn-open-feedback-drawer" class="btn btn-secondary btn-feedback">
               💬 Request Changes
             </button>
+            <button id="btn-plan-rollback" class="btn btn-secondary btn-rollback hidden" title="Restore files to pre-execution checkpoint">
+              ⏪ Rollback
+            </button>
           </div>
         </div>
 
@@ -340,6 +346,7 @@ export function getWebviewContent(
                 </div>
               </div>
               <div class="plan-title-actions">
+                <button id="btn-walkthrough-rollback" class="btn btn-sm btn-danger btn-rollback hidden" title="Restore files to pre-execution checkpoint">⏪ Rollback</button>
                 <button id="btn-regenerate-walkthrough" class="btn btn-sm btn-secondary" title="Re-synthesize verification report">🔄 Regenerate</button>
                 <button id="btn-open-raw-walkthrough" class="btn btn-sm btn-secondary" title="Open walkthrough.md in editor">Open Markdown ↗</button>
               </div>
