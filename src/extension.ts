@@ -70,6 +70,10 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand('antigravity.rollbackMission', async () => {
       await provider.rollbackMission();
+    }),
+
+    vscode.commands.registerCommand('antigravity.selectModel', async () => {
+      await provider.promptModelSelection();
     })
   );
 

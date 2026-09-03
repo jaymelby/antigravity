@@ -108,6 +108,11 @@
         "command": "antigravity.rollbackMission",
         "title": "Antigravity: Rollback Mission to Checkpoint",
         "category": "Antigravity"
+      },
+      {
+        "command": "antigravity.selectModel",
+        "title": "Antigravity: Select AI Model",
+        "category": "Antigravity"
       }
     ],
     "configuration": {

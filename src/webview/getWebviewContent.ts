@@ -75,6 +75,11 @@ export function getWebviewContent(
             <span class="telemetry-label">Discovered Rate:</span>
             <span id="telemetry-pricing-label" class="telemetry-val text-muted">Auto-detected from Copilot</span>
           </div>
+          <div class="telemetry-row" style="margin-top: 6px;">
+            <button id="btn-telemetry-switch-model" class="btn btn-sm btn-secondary" style="width: 100%;">
+              ⚡ Switch Model Ahead of Time...
+            </button>
+          </div>
         </div>
 
         <div class="telemetry-group">
@@ -441,11 +446,19 @@ export function getWebviewContent(
 
     <!-- DOCKED BOTTOM PROMPT BAR -->
     <footer class="docked-prompt-bar">
-      <div class="action-pills">
-        <button class="pill-btn" data-cmd="/plan">⚡ /plan</button>
-        <button class="pill-btn" data-cmd="/execute">✅ /execute</button>
-        <button class="pill-btn" data-cmd="/walkthrough">🔍 /walkthrough</button>
-        <button class="pill-btn" data-cmd="/scratch">🧠 /scratch</button>
+      <div class="prompt-toolbar-row">
+        <div class="action-pills">
+          <button class="pill-btn" data-cmd="/plan">⚡ /plan</button>
+          <button class="pill-btn" data-cmd="/execute">✅ /execute</button>
+          <button class="pill-btn" data-cmd="/walkthrough">🔍 /walkthrough</button>
+          <button class="pill-btn" data-cmd="/scratch">🧠 /scratch</button>
+        </div>
+        <div class="model-picker-pill" title="Set AI model ahead of time for your next task">
+          <span class="model-picker-icon">🤖</span>
+          <select id="prompt-model-select" class="prompt-model-select" title="Select model for all tasks">
+            <option value="auto">Auto / Default</option>
+          </select>
+        </div>
       </div>
 
       <!-- Attached Files Strip & Auto-Grep indicator -->
@@ -465,7 +478,9 @@ export function getWebviewContent(
       </div>
       <div class="dock-footer">
         <span class="prompt-tip"><kbd>@</kbd> attach, or Right-Click file in Explorer → "Attach to Antigravity"</span>
-        <span class="model-badge">Copilot LM (Multi-File Grep)</span>
+        <button id="btn-quick-model-change" class="dock-model-btn" title="Click to switch model via QuickPick menu">
+          <span id="dock-model-name">🤖 Model: Auto</span>
+        </button>
       </div>
     </footer>
   </div>

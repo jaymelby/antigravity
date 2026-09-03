@@ -51,6 +51,7 @@ const telemetryLastCost = document.getElementById("telemetry-last-cost");
 const telemetryTotalTokens = document.getElementById("telemetry-total-tokens");
 const telemetryTotalAic = document.getElementById("telemetry-total-aic");
 const telemetryTotalUsd = document.getElementById("telemetry-total-usd");
+const btnTelemetrySwitchModel = document.getElementById("btn-telemetry-switch-model");
 
 // Plan Elements
 const planTitle = document.getElementById("plan-title");
@@ -87,6 +88,9 @@ const promptInput = document.getElementById("prompt-input");
 const btnSendPrompt = document.getElementById("btn-send-prompt");
 const btnAttachFile = document.getElementById("btn-attach-file");
 const attachedChipsContainer = document.getElementById("attached-chips-container");
+const promptModelSelect = document.getElementById("prompt-model-select");
+const btnQuickModelChange = document.getElementById("btn-quick-model-change");
+const dockModelName = document.getElementById("dock-model-name");
 
 // Attached Files State
 let attachedFiles = [];
@@ -110,6 +114,28 @@ window.removeAttachedFile = function(index) {
 if (btnAttachFile) {
   btnAttachFile.addEventListener("click", () => {
     vscode.postMessage({ type: "PICK_FILE_TO_ATTACH" });
+  });
+}
+
+if (promptModelSelect) {
+  promptModelSelect.addEventListener("change", () => {
+    vscode.postMessage({
+      type: "SET_MODEL",
+      payload: { modelId: promptModelSelect.value }
+    });
+  });
+}
+
+if (btnQuickModelChange) {
+  btnQuickModelChange.addEventListener("click", () => {
+    vscode.postMessage({ type: "PROMPT_SELECT_MODEL" });
+  });
+}
+
+if (btnTelemetrySwitchModel) {
+  btnTelemetrySwitchModel.addEventListener("click", () => {
+    vscode.postMessage({ type: "PROMPT_SELECT_MODEL" });
+    if (telemetryPopover) telemetryPopover.classList.add("hidden");
   });
 }
 
@@ -1103,18 +1129,35 @@ window.addEventListener("message", (event) => {
         if (settingMaxGrep && typeof payload.maxGrepFiles === "number") {
           settingMaxGrep.value = payload.maxGrepFiles;
         }
-        if (settingPreferredModel && Array.isArray(payload.availableModels)) {
-          settingPreferredModel.innerHTML = '<option value="auto">Auto / Default (Recommended)</option>';
-          payload.availableModels.forEach(m => {
-            const opt = document.createElement("option");
-            opt.value = m.id;
-            opt.textContent = `${m.name} (${m.pricing})`;
-            if (payload.preferredModel === m.id) opt.selected = true;
-            settingPreferredModel.appendChild(opt);
-          });
+
+        const buildOptionsHtml = (selectedId) => {
+          let html = '<option value="auto">Auto / Default</option>';
+          if (Array.isArray(payload.availableModels)) {
+            payload.availableModels.forEach(m => {
+              const isSel = selectedId === m.id ? "selected" : "";
+              html += `<option value="${escapeHtml(m.id)}" ${isSel}>${escapeHtml(m.name)} (${escapeHtml(m.pricing)})</option>`;
+            });
+          }
+          return html;
+        };
+
+        if (settingPreferredModel) {
+          settingPreferredModel.innerHTML = buildOptionsHtml(payload.preferredModel);
           if (payload.preferredModel === "auto" || !payload.preferredModel) {
             settingPreferredModel.value = "auto";
           }
+        }
+
+        if (promptModelSelect) {
+          promptModelSelect.innerHTML = buildOptionsHtml(payload.preferredModel);
+          if (payload.preferredModel === "auto" || !payload.preferredModel) {
+            promptModelSelect.value = "auto";
+          }
+        }
+
+        if (dockModelName) {
+          const active = payload.availableModels?.find(m => m.id === payload.preferredModel);
+          dockModelName.textContent = active ? `🤖 ${active.name}` : (payload.preferredModel === "auto" ? "🤖 Model: Auto" : `🤖 ${payload.preferredModel}`);
         }
       }
       break;
@@ -1123,6 +1166,7 @@ window.addEventListener("message", (event) => {
       if (payload) {
         if (payload.turn) {
           if (hudModelName) hudModelName.textContent = payload.turn.modelName;
+          if (dockModelName) dockModelName.textContent = `🤖 ${payload.turn.modelName}`;
           if (telemetryModelName) telemetryModelName.textContent = payload.turn.modelName;
           if (telemetryPricingLabel) telemetryPricingLabel.textContent = payload.turn.pricingLabel;
           if (telemetryLastIn) telemetryLastIn.textContent = payload.turn.inputTokens.toLocaleString();
@@ -1136,6 +1180,7 @@ window.addEventListener("message", (event) => {
           if (telemetryTotalUsd) telemetryTotalUsd.textContent = `$${payload.session.sessionUsd.toFixed(4)} USD`;
           if (!payload.turn && payload.session.lastTurn) {
             if (hudModelName) hudModelName.textContent = payload.session.lastTurn.modelName;
+            if (dockModelName) dockModelName.textContent = `🤖 ${payload.session.lastTurn.modelName}`;
             if (telemetryModelName) telemetryModelName.textContent = payload.session.lastTurn.modelName;
             if (telemetryPricingLabel) telemetryPricingLabel.textContent = payload.session.lastTurn.pricingLabel;
           }

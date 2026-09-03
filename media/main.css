@@ -1656,6 +1656,73 @@ input:checked + .slider:before {
 .font-mono { font-family: var(--vscode-editor-font-family, monospace); }
 .font-bold { font-weight: 700; }
 
+/* Prompt Toolbar & Live Model Picker */
+.prompt-toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.model-picker-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 2px 7px;
+  font-size: 11px;
+  transition: all 0.2s ease;
+}
+
+.model-picker-pill:hover,
+.model-picker-pill:focus-within {
+  background: rgba(137, 180, 250, 0.12);
+  border-color: var(--accent);
+}
+
+.model-picker-icon {
+  font-size: 12px;
+}
+
+.prompt-model-select {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+  max-width: 175px;
+  text-overflow: ellipsis;
+}
+
+.prompt-model-select option {
+  background: #1e1e2e;
+  color: var(--text-main);
+}
+
+.dock-model-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 1px 7px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.dock-model-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(137, 180, 250, 0.1);
+}
+
 .hidden { display: none !important; }
+
 
 

@@ -120,6 +120,20 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
           break;
         }
 
+        case 'SET_MODEL':
+          if (message.payload?.modelId) {
+            const config = vscode.workspace.getConfiguration('antigravity');
+            await config.update('preferredModel', message.payload.modelId, vscode.ConfigurationTarget.Global);
+            await this.sendSettings();
+            this.broadcastTelemetry();
+            vscode.window.showInformationMessage(`🤖 Antigravity model set to: ${message.payload.modelId}`);
+          }
+          break;
+
+        case 'PROMPT_SELECT_MODEL':
+          await this.promptModelSelection();
+          break;
+
         case 'FILES_DROPPED': {
           const rawPaths: string[] = message.payload?.paths || [];
           const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -1177,14 +1191,68 @@ export class AntigravityViewProvider implements vscode.WebviewViewProvider {
     }
 
     if (preferred && preferred !== 'auto') {
-      const match = copilotModels.find((m: vscode.LanguageModelChat) =>
-        m.id.toLowerCase() === preferred.toLowerCase() ||
-        m.family.toLowerCase() === preferred.toLowerCase()
-      );
+      const p = preferred.toLowerCase().trim();
+      const match = copilotModels.find((m: vscode.LanguageModelChat) => {
+        const mId = m.id.toLowerCase().trim();
+        const mFam = m.family.toLowerCase().trim();
+        const mName = m.name.toLowerCase().trim();
+        return mId === p ||
+               mFam === p ||
+               mName === p ||
+               mId.replace(/^copilot\//, '') === p ||
+               mId.includes(p) ||
+               mFam.includes(p) ||
+               p.includes(mFam) ||
+               p.includes(mId);
+      });
       if (match) return match;
     }
 
+    if (preferred === 'auto') {
+      const autoModel = copilotModels.find((m: vscode.LanguageModelChat) => m.id.toLowerCase().includes('auto'));
+      if (autoModel) return autoModel;
+    }
+
     return copilotModels[0];
+  }
+
+  public async promptModelSelection() {
+    const availableModels = await this.telemetryService.getAvailableModels();
+    const config = vscode.workspace.getConfiguration('antigravity');
+    const currentPreferred = config.get<string>('preferredModel', 'auto');
+
+    const items: (vscode.QuickPickItem & { modelId: string })[] = [
+      {
+        label: '$(sparkle) Auto / Default',
+        description: 'Automatic model routing by GitHub Copilot',
+        detail: currentPreferred === 'auto' ? '✓ Currently Active' : '',
+        modelId: 'auto'
+      }
+    ];
+
+    for (const m of availableModels) {
+      const isCurrent = currentPreferred.toLowerCase() === m.id.toLowerCase() ||
+                        currentPreferred.toLowerCase() === m.family.toLowerCase() ||
+                        currentPreferred.toLowerCase() === m.name.toLowerCase();
+      items.push({
+        label: `$(hubot) ${m.name}`,
+        description: m.pricing,
+        detail: isCurrent ? '✓ Currently Active' : '',
+        modelId: m.id
+      });
+    }
+
+    const picked = await vscode.window.showQuickPick(items, {
+      title: 'Antigravity: Select Active AI Model',
+      placeHolder: 'Choose which language model Antigravity uses for coding missions'
+    });
+
+    if (picked) {
+      await config.update('preferredModel', picked.modelId, vscode.ConfigurationTarget.Global);
+      vscode.window.showInformationMessage(`🤖 Antigravity model set to: ${picked.label.replace(/\$\([^)]+\)\s*/, '')}`);
+      await this.sendSettings();
+      this.broadcastTelemetry();
+    }
   }
 
   public broadcastTelemetry(turn?: TurnTelemetry) {
