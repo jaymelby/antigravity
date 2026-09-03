@@ -13,6 +13,7 @@
     "Other"
   ],
   "activationEvents": [
+    "onStartupFinished",
     "onView:antigravity.controlCenter",
     "onChatParticipant:antigravity"
   ],
